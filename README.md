@@ -1,90 +1,19 @@
-# Basic Cryptography - AES and RSA
-AES and RSA for secure network communications
+# Correlation Power Analysis Attack 
+## Overview
+Implemented a correlation power analysis (CPA) attack and recovered a full round key used in an AES encryption process. We are provided with a set of power traces of the 128-bit AES core running on an FPGA board already acquired in the NUEESS lab (http://tescase.coe.neu.edu/) of Northeastern
+University. We will need to utilize a leakage point to perform a correlation power analysis and recover the full round key.
 
-## 1 Overview
-Use AES and RSA for secure network communications. These two cryptographic algorithms are used in our daily life (e.g. HTTPS protocol). 
-We will analyze the performance of OpenSSL implementations of both algorithms, and then we will use them to set up secure communication between the client and the server to obtain a secret.
+## Data Set
+We have a set of 7000 power traces of an unmasked AES running on an FPGA board (SAKURA-GII). As we are attacking the last round, we will need to use cipher 7000.txt and trace 7000.txt files for this. Each row of both files is for one encryption, which consists of one 16-byte ciphertext and one 3125-point power trace, respectively. We will first generate a plot of one power trace in the data set. 
 
-## 3 Lab Module 1: Performance of Ciphers 
-The OpenSSL library has the following APIs for RSA
-1. RSA public encrypt
-2. RSA public decrypt
-3. RSA private decrypt
-4. RSA private encrypt
+## Correlation Power Analysis with Hamming Distance Power Model
 
-and for AES
+We will need to use the Hamming Distance (HD) power model to recover all 16 AES key bytes. With the correct key byte value, the HD model yields the strongest correlation with power values at time point 2663 (the HD Leakage Point).
 
-1. AES encrypt
-2. AES decrypt
+*Organization of AES State*: The 128-bit AES, has ten rounds and eleven states, where each state is 16-byte. Its index is increasing vertically within columns.
 
-First understand how to use these ciphers, and write the programs to measure the performance of RSA public encrypt and AES encrypt functions. Use and time these functions to encrypt a 16-byte data.
-Collect one million timing samples for each function. You will need to look up the appropriate timer and also the parameters for AES encrypt() and RSA public encrypt().
+*Hamming distance power model*: We attack the last round of AES and use the Hamming distance power model for each byte. Assume the input state for the last round is S and the output state is the ciphertext
+C, and the relationship between them is cj = sbox[si] ⊕ kj due to the ShiftRow operation, i.e., si = inv sbox[cj ⊕ kj ] , with the mapping between the input state index i and output state index j.
 
-The pseudo code for measuring AES is:
-```
-for (i = 0; i < 1000000; i++){
-t1 = timer_start()
-AES_encrypt()
-t2 = timer_stop()
-timearray[i] = t2 - t1
-}
-plot_distribution(timearray);
-```
-
-The pseudo code for measuring RSA public key implementation is:
-```
-for (i = 0; i < 1000000; i++){
-t1 = timer_start()
-RSA_public_encrypt()
-t2 = timer_stop()
-timearray[i] = t2 - t1}
-plot_distribution(timearray);
-```
-
-To allow your programs to use these cryptographic functions included in the OpenSSL library, you can
-refer to the following Makefile example for header files inclusion and static library linking. Note to update
-OPENSSL setting to the directory of your downloaded OpenSSL:
-``
-CC=gcc
-OPENSSL=../../openssl
-INCLUDE=$(OPENSSL)/include/
-CFLAGS=-c -I$(INCLUDE)
-all: program
-program: program.c
-$(CC) program.c -I$(INCLUDE) -o program $(OPENSSL)/libcrypto.a -ldl -lpthread
-clean:
-rm -rf program
-```
-
-Plot timing distributions of these samples and find the mean for each function.
-
-## 4 Lab Module 2: AES Encryption Mode
-There are several operation modes of AES. In this section, you will explore two of them: ECB and CBC.
-Using each of these two modes to encrypt an image file and report your findings.
-
-To simplify the experiment, we will be using an image in the PPM format. First, separate the header
-and body sections of the image:
-```
-$ head -n 4 penguin.PPM > header.txt
-$ tail -n +5 penguin.PPM > body.bin
-```
-
-Encrypt the body sections and reconstruct the image using the header and encrypted body sections.
-```
-$ openssl enc -aes-128-ecb -nosalt -pass pass:"A" -in body.bin -out enc_body.bin
-$ cat header.txt enc_body.bin > ecb_penguin.ppm
-```
-
-## Lab Module 3: Secure Communication
-You will need to use both AES and RSA to communicate with a service we host on 10.75.11.176 at port
-12000 and obtain a 16-byte secret. This address cannot be accessed from the public Internet.
-
-The following is the communication protocol:
-```
-server -> [size of server’s public key] -> client
-server -> [server’s public key] -> client
-server <- [size of the client’s AES key encrypted using server’s public key] <- client
-server <- [encrypted client’s AES key <- client
-server -> [encrypted secret message using client’s AES key] -> client
-connection close
-```
+So the HD power model for each byte will be HD(si, ci) = HD(inv sbox[cj ⊕ kj ], ci). With each key byte guess value, using this HD model to correlate with power values at the leakage point. The correct key
+byte value should be the one with the strongest correlation.
